@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-pub mod new_lobby;
 pub mod add_user;
+pub mod new_lobby;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Platform {

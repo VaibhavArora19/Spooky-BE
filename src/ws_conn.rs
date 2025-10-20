@@ -14,10 +14,47 @@ pub enum ActionType {
     UserJoined,
     UserLeft,
     NewLobbyCreated,
+    UserCreated,
     Unknown,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebsocketEvent {
+    pub action: ActionType,
+    pub lobby_id: Option<String>,
+    pub user_id: Option<String>,
+    pub payload: EventPayload,
+}
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum EventPayload {
+    CreateUser(UserData),
+    CreateLobby(LobbyData),
+    UserJoined(UserJoinData),
+    UserLeft,
+    VideoAction,
+    ChatMessage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserData {
+    pub name: String,
+    pub avatar: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LobbyData {
+    pub lobby_id: String,
+    pub users: Vec<String>,
+    pub platform: Platform,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserJoinData {
+    pub user_id: String,
+    pub lobby_id: String,
+}
 
 impl FromStr for ActionType {
     type Err = ();
@@ -33,15 +70,6 @@ impl FromStr for ActionType {
             _ => Ok(ActionType::Unknown),
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebSocketEvent {
-    pub action: ActionType,
-    pub lobby_id: String,
-    pub user: String,
-    pub platform: Platform,
-    pub message: Option<String>,
 }
 
 pub async fn create_websocket_connection() -> Result<TcpListener, anyhow::Error> {
