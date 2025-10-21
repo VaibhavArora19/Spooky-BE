@@ -1,10 +1,10 @@
-use crate::{actions::Platform, config};
-use futures_util::stream::StreamExt;
+use crate::config;
+use futures_util::stream::{SplitSink, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActionType {
@@ -13,8 +13,6 @@ pub enum ActionType {
     Skip,
     UserJoined,
     UserLeft,
-    NewLobbyCreated,
-    UserCreated,
     Unknown,
 }
 
@@ -29,25 +27,10 @@ pub struct WebsocketEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum EventPayload {
-    CreateUser(UserData),
-    CreateLobby(LobbyData),
     UserJoined(UserJoinData),
     UserLeft,
     VideoAction,
     ChatMessage,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserData {
-    pub name: String,
-    pub avatar: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LobbyData {
-    pub lobby_id: String,
-    pub users: Vec<String>,
-    pub platform: Platform,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,14 +49,13 @@ impl FromStr for ActionType {
             "skip" => Ok(ActionType::Skip),
             "user_joined" => Ok(ActionType::UserJoined),
             "user_left" => Ok(ActionType::UserLeft),
-            "new_lobby_created" => Ok(ActionType::NewLobbyCreated),
             _ => Ok(ActionType::Unknown),
         }
     }
 }
 
 pub async fn create_websocket_connection() -> Result<TcpListener, anyhow::Error> {
-    let port = config::Config::get_config().port;
+    let port = config::Config::get_config().ws_port;
 
     log::info!("Starting WebSocket server on port: {}", port);
 
@@ -93,7 +75,7 @@ pub async fn create_websocket_connection() -> Result<TcpListener, anyhow::Error>
 pub async fn handle_connection(
     raw_stream: TcpStream,
     addr: SocketAddr,
-) -> Result<Message, anyhow::Error> {
+) -> Result<(SplitSink<WebSocketStream<TcpStream>, Message>, Message), anyhow::Error> {
     println!("Incoming TCP connection from: {:?}", addr);
 
     let ws_stream = tokio_tungstenite::accept_async(raw_stream)
@@ -102,7 +84,7 @@ pub async fn handle_connection(
 
     log::info!("WebSocket connection established: {:?}", addr);
 
-    let (_, mut incoming) = ws_stream.split();
+    let (outgoing, mut incoming) = ws_stream.split();
 
     let broadcast_message_option = incoming.next().await;
 
@@ -123,5 +105,5 @@ pub async fn handle_connection(
 
     log::info!("Received a message from {}: {:?}", addr, broadcast_message);
 
-    Ok(broadcast_message)
+    Ok((outgoing, broadcast_message))
 }
