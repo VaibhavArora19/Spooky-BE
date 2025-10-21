@@ -19,7 +19,7 @@ pub enum ActionType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebsocketEvent {
     pub action: ActionType,
-    pub lobby_id: Option<String>,
+    pub room_id: Option<String>,
     pub user_id: Option<String>,
     pub payload: EventPayload,
 }
@@ -36,7 +36,7 @@ pub enum EventPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserJoinData {
     pub user_id: String,
-    pub lobby_id: String,
+    pub room_id: String,
 }
 
 impl FromStr for ActionType {

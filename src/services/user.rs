@@ -1,4 +1,4 @@
-use crate::{db::db::User, AppState};
+use crate::{AppState, db::db::User};
 use actix_web::{HttpResponse, post, web};
 use mongodb::{bson::doc, bson::oid::ObjectId};
 use names::Generator;
@@ -13,7 +13,7 @@ pub struct CreateUserRequest {
 
 #[derive(Serialize, Deserialize)]
 pub struct AddNewUserRequest {
-    lobby_id: String,
+    room_id: String,
     user_id: String,
 }
 
@@ -22,7 +22,6 @@ pub async fn create_new_user(
     req: web::Json<CreateUserRequest>,
     app_state: web::Data<AppState>,
 ) -> HttpResponse {
-
     let mut name_generator = Generator::with_naming(names::Name::Numbered);
     let username = name_generator.next().unwrap();
 
@@ -41,7 +40,9 @@ pub async fn create_new_user(
         Ok(insert_info) => {
             log::info!("User inserted successfully. Insert info: {:?}", insert_info);
 
-            app_state.redis.clone()
+            app_state
+                .redis
+                .clone()
                 .set_nx::<String, String, ()>(
                     user_id.clone().to_string(),
                     serde_json::to_string(&user).unwrap(),

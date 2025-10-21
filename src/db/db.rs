@@ -12,7 +12,7 @@ pub struct User {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct Lobby {
+pub struct Room {
     #[serde(rename = "_id")]
     pub id: mongodb::bson::oid::ObjectId,
     pub users: Vec<mongodb::bson::oid::ObjectId>,
@@ -21,13 +21,13 @@ pub struct Lobby {
 
 pub async fn connect_to_db(
     mongodb_url: String,
-) -> Result<(Database, Collection<User>, Collection<Lobby>), Error> {
+) -> Result<(Database, Collection<User>, Collection<Room>), Error> {
     let client = Client::with_uri_str(mongodb_url.as_str()).await?;
 
     let db = client.database("lofi-party");
 
     let users = db.collection::<User>("users");
-    let lobbies = db.collection::<Lobby>("lobbies");
+    let rooms = db.collection::<Room>("rooms");
 
     let options = IndexOptions::builder().unique(true).build();
 
@@ -36,8 +36,8 @@ pub async fn connect_to_db(
         .options(options.clone())
         .build();
 
-    let lobby_model = IndexModel::builder()
-        .keys(mongodb::bson::doc! { "lobby_id": 1 })
+    let room_model = IndexModel::builder()
+        .keys(mongodb::bson::doc! { "room_id": 1 })
         .options(options)
         .build();
 
@@ -47,14 +47,11 @@ pub async fn connect_to_db(
         return Err(anyhow::Error::msg("Failed to create index on user"));
     };
 
-    if let Err(err) = lobbies.create_index(lobby_model).await {
-        log::error!(
-            "Failed to create index on lobby. Failed with err: {:?}",
-            err
-        );
+    if let Err(err) = rooms.create_index(room_model).await {
+        log::error!("Failed to create index on room. Failed with err: {:?}", err);
 
-        return Err(anyhow::Error::msg("Failed to create index on lobby"));
+        return Err(anyhow::Error::msg("Failed to create index on room"));
     };
 
-    Ok((db, users, lobbies))
+    Ok((db, users, rooms))
 }

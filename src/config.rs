@@ -31,7 +31,6 @@ impl Config {
         let mongodb_url =
             env::var("MONGODB_URL").unwrap_or_else(|_| ConfigError::InvalidDBUrl.to_string());
 
-
         Self {
             http_port,
             ws_port,

@@ -1,14 +1,15 @@
 use actix_cors::Cors;
-use actix_web::{web, App, HttpServer};
+use actix_web::{App, HttpServer, web};
 use anyhow::Error;
 use lofi_party::{
+    AppState,
     actions::add_user::add_new_user,
     db::db::connect_to_db,
     redis::connect_to_redis,
-    services::{lobby::create_new_lobby, user::create_new_user},
-    ws_conn::{self, handle_connection, ActionType}, AppState,
+    services::{room::create_new_room, user::create_new_user},
+    ws_conn::{self, ActionType, handle_connection},
 };
-use mongodb::{bson::oid::ObjectId};
+use mongodb::bson::oid::ObjectId;
 use ws_conn::WebsocketEvent;
 
 #[actix_web::main]
@@ -31,13 +32,18 @@ async fn main() -> Result<(), Error> {
 
         HttpServer::new(move || {
             App::new()
-            .wrap(Cors::default().allow_any_origin().allow_any_header().allow_any_method())
+                .wrap(
+                    Cors::default()
+                        .allow_any_origin()
+                        .allow_any_header()
+                        .allow_any_method(),
+                )
                 .app_data(web::Data::new(AppState {
                     db: db_clone.clone(),
                     redis: redis_clone.clone(),
                 }))
                 .service(create_new_user)
-                .service(create_new_lobby)
+                .service(create_new_room)
         })
         .bind(("localhost", config.http_port.parse::<u16>().unwrap()))
         .unwrap()
@@ -52,22 +58,37 @@ async fn main() -> Result<(), Error> {
 
         while let Ok((stream, addr)) = server.accept().await {
             let (_, message) = handle_connection(stream, addr).await.unwrap();
-            let websocket_event_details: WebsocketEvent =
-                serde_json::from_str(message.to_text().unwrap()).unwrap();
+            // let websocket_event_details: WebsocketEvent =
+            //     serde_json::from_str(message.to_text().expect("Failed to convert message to text")).expect("Failed to parse message");
 
-            if let ActionType::UserJoined = websocket_event_details.action {
-                if let ws_conn::EventPayload::UserJoined(user_data) =
-                    websocket_event_details.payload
-                {
-                    let _user_info = add_new_user(
-                        ObjectId::parse_str(&user_data.lobby_id).unwrap(),
-                        ObjectId::parse_str(&user_data.user_id).unwrap(),
-                        &mut redis_connection,
-                        db.clone(),
-                    )
-                    .await
-                    .unwrap();
+            if let Ok(text) = message.to_text() {
+                log::info!("Text: {}", text);
+                match serde_json::from_str::<WebsocketEvent>(text) {
+                    Ok(websocket_event_details) => {
+                        if let ActionType::UserJoined = websocket_event_details.action {
+                            if let ws_conn::EventPayload::UserJoined(user_data) =
+                                websocket_event_details.payload
+                            {
+                                let _user_info = add_new_user(
+                                    ObjectId::parse_str(&user_data.room_id).unwrap(),
+                                    ObjectId::parse_str(&user_data.user_id).unwrap(),
+                                    &mut redis_connection,
+                                    db.clone(),
+                                )
+                                .await
+                                .unwrap();
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        log::error!("Failed to parse websocket event. Failed with error: {:?}", err);
+
+                        continue;
+                    }
                 }
+            } else {
+                log::error!("Failed to convert message to text");
+                continue;
             }
         }
     });
