@@ -15,6 +15,7 @@ pub struct User {
 pub struct Room {
     #[serde(rename = "_id")]
     pub id: mongodb::bson::oid::ObjectId,
+    pub room_id: String,
     pub users: Vec<mongodb::bson::oid::ObjectId>,
     pub platform: String,
 }

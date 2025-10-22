@@ -3,13 +3,13 @@ use mongodb::bson::oid::ObjectId;
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 
-use crate::{AppState, db::db::Room};
+use crate::{actions::Platform, db::db::Room, AppState};
 
 #[derive(Serialize, Deserialize)]
 pub struct RoomRequest {
-    id: String,
+    room_id: String,
     users: Vec<String>,
-    platform: String,
+    platform: Platform,
 }
 
 #[post("/room/create")]
@@ -19,6 +19,8 @@ pub async fn create_new_room(
 ) -> HttpResponse {
     let room_collection = app_state.db.collection::<Room>("rooms");
 
+    let id = ObjectId::new();
+
     let user_ids: Vec<ObjectId> = req
         .users
         .iter()
@@ -26,7 +28,8 @@ pub async fn create_new_room(
         .collect();
 
     let room_details = Room {
-        id: mongodb::bson::oid::ObjectId::parse_str(req.id.clone()).unwrap(),
+        id,
+        room_id: req.room_id.clone(),
         users: user_ids,
         platform: serde_json::to_string(&req.platform).unwrap(),
     };
@@ -47,5 +50,5 @@ pub async fn create_new_room(
 
     log::info!("New room created with ID: {}", room_details.id.to_string());
 
-    HttpResponse::Ok().body(req.id.clone())
+    HttpResponse::Ok().body(req.room_id.clone())
 }

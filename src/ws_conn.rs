@@ -1,10 +1,11 @@
-use crate::config;
 use futures_util::stream::{SplitSink, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
+use tokio_tungstenite::{accept_async, tungstenite::Message, WebSocketStream};
+
+use crate::config;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActionType {
@@ -78,9 +79,13 @@ pub async fn handle_connection(
 ) -> Result<(SplitSink<WebSocketStream<TcpStream>, Message>, Message), anyhow::Error> {
     println!("Incoming TCP connection from: {:?}", addr);
 
-    let ws_stream = tokio_tungstenite::accept_async(raw_stream)
+    // This handles the HTTP WebSocket upgrade automatically
+    let ws_stream = accept_async(raw_stream)
         .await
-        .expect("Error during the websocket handshake occured");
+        .map_err(|e| {
+            log::error!("WebSocket handshake error for {:?}: {:?}", addr, e);
+            anyhow::Error::msg(format!("Error during the websocket handshake: {}", e))
+        })?;
 
     log::info!("WebSocket connection established: {:?}", addr);
 
@@ -90,16 +95,14 @@ pub async fn handle_connection(
 
     if broadcast_message_option.is_none() {
         log::error!("No message received from client: {:?}", addr);
-
         return Err(anyhow::Error::msg("No message received from client"));
     }
 
     let broadcast_message = broadcast_message_option.unwrap().map_err(|e| {
-        log::info!(
+        log::error!(
             "Failed to get broadcasted message. Failed with error: {:?}",
             e
         );
-
         anyhow::Error::msg("Failed to get broadcasted message")
     })?;
 
