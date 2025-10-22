@@ -27,7 +27,7 @@ async fn run_websocket(mut redis_connection: MultiplexedConnection, db: Database
                                 websocket_event_details.payload
                             {
                                 let _user_info = add_new_user(
-                                    ObjectId::parse_str(&user_data.room_id).unwrap(),
+                                    user_data.room_id,
                                     ObjectId::parse_str(&user_data.user_id).unwrap(),
                                     &mut redis_connection,
                                     db.clone(),

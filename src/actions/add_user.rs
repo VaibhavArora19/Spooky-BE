@@ -5,7 +5,7 @@ use redis::{AsyncCommands, aio::MultiplexedConnection};
 use crate::db::db::Room;
 
 pub async fn add_new_user(
-    room_id: mongodb::bson::oid::ObjectId,
+    room_id: String,
     user: mongodb::bson::oid::ObjectId,
     redis_conn: &mut MultiplexedConnection,
     db_conn: Database,
@@ -14,7 +14,7 @@ pub async fn add_new_user(
 
     if let Err(error) = room_collection
         .update_one(
-            doc! { "id": room_id.clone() },
+            doc! { "room_id": room_id.clone() },
             doc! { "$addToSet": {"users": user.clone() }},
         )
         .await
