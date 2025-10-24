@@ -12,11 +12,18 @@ pub struct User {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct Message {
+    pub user_id: mongodb::bson::oid::ObjectId,
+    pub message: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Room {
     #[serde(rename = "_id")]
     pub id: mongodb::bson::oid::ObjectId,
     pub room_id: String,
     pub users: Vec<mongodb::bson::oid::ObjectId>,
+    pub messages: Vec<Message>,
     pub platform: String,
 }
 

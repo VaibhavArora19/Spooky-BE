@@ -1,9 +1,8 @@
 use actix_web::{HttpResponse, post, web};
 use mongodb::bson::oid::ObjectId;
-use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 
-use crate::{actions::Platform, db::db::Room, AppState};
+use crate::{AppState, actions::Platform, db::db::Room};
 
 #[derive(Serialize, Deserialize)]
 pub struct RoomRequest {
@@ -31,6 +30,7 @@ pub async fn create_new_room(
         id,
         room_id: req.room_id.clone(),
         users: user_ids,
+        messages: Vec::new(),
         platform: serde_json::to_string(&req.platform).unwrap(),
     };
 
@@ -39,16 +39,10 @@ pub async fn create_new_room(
         .await
         .unwrap();
 
-    let serialized_details = serde_json::to_string(&room_details).unwrap();
-
-    app_state
-        .redis
-        .clone()
-        .set::<String, String, ()>(room_details.room_id.clone(), serialized_details)
-        .await
-        .unwrap();
-
-    log::info!("New room created with ID: {}", room_details.room_id.to_string());
+    log::info!(
+        "New room created with ID: {}",
+        room_details.room_id.to_string()
+    );
 
     HttpResponse::Ok().body(req.room_id.clone())
 }

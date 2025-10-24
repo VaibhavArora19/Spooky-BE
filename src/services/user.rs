@@ -2,7 +2,6 @@ use crate::{AppState, db::db::User};
 use actix_web::{HttpResponse, post, web};
 use mongodb::{bson::doc, bson::oid::ObjectId};
 use names::Generator;
-use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -39,16 +38,6 @@ pub async fn create_new_user(
     match user_collection.insert_one(user.clone()).await {
         Ok(insert_info) => {
             log::info!("User inserted successfully. Insert info: {:?}", insert_info);
-
-            app_state
-                .redis
-                .clone()
-                .set_nx::<String, String, ()>(
-                    user_id.clone().to_string(),
-                    serde_json::to_string(&user).unwrap(),
-                )
-                .await
-                .unwrap();
 
             let user = User {
                 id: Some(user_id),

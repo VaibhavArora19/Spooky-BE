@@ -1,9 +1,9 @@
-use futures_util::stream::{SplitSink, StreamExt};
+use futures_util::{stream::{SplitSink, StreamExt}, SinkExt};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::{accept_async, tungstenite::Message, WebSocketStream};
+use tokio_tungstenite::{WebSocketStream, accept_async, tungstenite::Message};
 
 use crate::config;
 
@@ -15,6 +15,7 @@ pub enum ActionType {
     UserJoined,
     UserLeft,
     Unknown,
+    Message
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,13 +32,20 @@ pub enum EventPayload {
     UserJoined(UserJoinData),
     UserLeft,
     VideoAction,
-    ChatMessage,
+    ChatMessage(MessageData),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserJoinData {
     pub user_id: String,
     pub room_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageData {
+    pub user_id: String,
+    pub room_id: String,
+    pub message: String
 }
 
 impl FromStr for ActionType {
@@ -50,6 +58,7 @@ impl FromStr for ActionType {
             "skip" => Ok(ActionType::Skip),
             "user_joined" => Ok(ActionType::UserJoined),
             "user_left" => Ok(ActionType::UserLeft),
+            "message" => Ok(ActionType::Message),
             _ => Ok(ActionType::Unknown),
         }
     }
@@ -80,12 +89,10 @@ pub async fn handle_connection(
     println!("Incoming TCP connection from: {:?}", addr);
 
     // This handles the HTTP WebSocket upgrade automatically
-    let ws_stream = accept_async(raw_stream)
-        .await
-        .map_err(|e| {
-            log::error!("WebSocket handshake error for {:?}: {:?}", addr, e);
-            anyhow::Error::msg(format!("Error during the websocket handshake: {}", e))
-        })?;
+    let ws_stream = accept_async(raw_stream).await.map_err(|e| {
+        log::error!("WebSocket handshake error for {:?}: {:?}", addr, e);
+        anyhow::Error::msg(format!("Error during the websocket handshake: {}", e))
+    })?;
 
     log::info!("WebSocket connection established: {:?}", addr);
 
