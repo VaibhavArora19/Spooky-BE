@@ -1,20 +1,21 @@
+use std::{collections::HashMap, sync::Arc};
+
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, web};
 use anyhow::Error;
-use futures_util::SinkExt;
 use lofi_party::{
-    actions::add_user::add_new_user, db::db::{connect_to_db, Message}, services::{message::add_message, room::create_new_room, user::create_new_user}, ws_conn::{self, handle_connection, ActionType}, AppState
+    actions::add_user::add_new_user, db::db::{connect_to_db, Message}, services::{message::{add_message, broadcast_message}, room::create_new_room, user::create_new_user}, ws_conn::{self, handle_connection, ActionType}, AppState, RoomUserMap
 };
 use mongodb::{Database, bson::oid::ObjectId};
-use tokio::signal::{self};
-use tokio_tungstenite::tungstenite::Message as TokioMessage;
+use tokio::{signal::{self}, sync::RwLock};
 use ws_conn::WebsocketEvent;
 
-async fn run_websocket(db: Database) {
+
+async fn run_websocket(db: Database, room_users_collection: RoomUserMap) {
     let server = ws_conn::create_websocket_connection().await.unwrap();
 
     while let Ok((stream, addr)) = server.accept().await {
-        let (mut outgoing, message) = handle_connection(stream, addr).await.unwrap();
+        let (outgoing, message) = handle_connection(stream, addr).await.unwrap();
 
 
         if let Ok(text) = message.to_text() {
@@ -26,12 +27,17 @@ async fn run_websocket(db: Database) {
                             websocket_event_details.payload
                         {
                             let _user_info = add_new_user(
-                                user_data.room_id,
+                                user_data.room_id.clone(),
                                 ObjectId::parse_str(&user_data.user_id).unwrap(),
                                 db.clone(),
                             )
                             .await
                             .unwrap();
+
+                        let mut write_users_connection = room_users_collection.write().await;
+
+                        let room_map = write_users_connection.entry(user_data.room_id).or_insert(HashMap::new());
+                        room_map.insert(user_data.user_id, Arc::new(RwLock::new(outgoing)));
                         }
                     },
                     ActionType::Message => {
@@ -42,11 +48,10 @@ async fn run_websocket(db: Database) {
                                 message: message_data.message
                             };
 
-                            match add_message(db.clone(), message_data.room_id, message).await {
+                            match add_message(db.clone(), message_data.room_id.clone(), message).await {
                                 Ok(result) => {
-                                    if let Err(error) = outgoing.send(TokioMessage::Text(serde_json::to_string(&result).unwrap().into())).await {
-                                        log::error!("Failed to send the response back. Failed with error: {:?}", error);
-                                    }
+                                    broadcast_message(room_users_collection.clone(), message_data.room_id, result).await;                                
+
                                 },
                                 Err(err) => {
                                     log::error!("Failed to add message into the DB. Failed with error: {:?}", err)
@@ -110,13 +115,15 @@ async fn main() -> Result<(), Error> {
     // Spawn Actix HTTP server
     let http_db_clone = db.clone();
 
+    let users_connection: RoomUserMap = Arc::new(RwLock::new(HashMap::new()));
+
     tokio::select! {
         result = run_api(http_db_clone, config.http_port) => {
             if let Err(e) = result {
                 log::error!("API server error: {}", e);
             }
         }
-        _ = run_websocket(db) => {}
+        _ = run_websocket(db, users_connection) => {}
         _ = signal::ctrl_c() => {
             log::info!("Shutdown singal received. Stopping...");
         }

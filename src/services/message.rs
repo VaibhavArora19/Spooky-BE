@@ -1,9 +1,13 @@
+use futures_util::SinkExt;
 use mongodb::{
     bson::{doc, to_bson}, Database
 };
 use serde::{Deserialize, Serialize};
+use tokio_tungstenite::tungstenite::Message as TokioMessage;
 
 use crate::db::db::{Message, Room, User};
+
+use crate::RoomUserMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddMessageResponse {
@@ -58,4 +62,20 @@ pub async fn add_message(db: Database, room_id: String, message: Message) -> Res
         }
     }
 
+}
+
+pub async fn broadcast_message(room_users_collection: RoomUserMap, room_id: String, message: AddMessageResponse) {
+    let read = room_users_collection.read().await;
+
+    if let Some(users) = read.get(&room_id) {
+        let broadcast_message = TokioMessage::Text(serde_json::to_string(&message).unwrap().into());
+
+        for (user_id, tx) in users {
+            let mut  write_tx = tx.write().await;
+
+            if let Err(error) = write_tx.send(broadcast_message.clone()).await {
+                log::error!("Failed to send message to user: {:}. Failed with error: {:?}", user_id, error)
+            }
+        }
+    }
 }
