@@ -1,8 +1,8 @@
-use futures_util::{stream::{SplitSink, StreamExt}};
+use futures_util::stream::{SplitSink, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr};
+use std::net::SocketAddr;
 use std::str::FromStr;
-use tokio::{net::{TcpListener, TcpStream}};
+use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{WebSocketStream, accept_async, tungstenite::Message};
 
 use crate::config;
@@ -15,7 +15,22 @@ pub enum ActionType {
     UserJoined,
     UserLeft,
     Unknown,
-    Message
+    Message,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum VideoAction {
+    Play,
+    Pause,
+    Skip,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SyncInfo {
+    pub last_action: VideoAction,
+    pub time: u32,
+    pub updated_at: u64,
+    pub updated_by: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,7 +46,7 @@ pub struct WebsocketEvent {
 pub enum EventPayload {
     UserJoined(UserJoinData),
     UserLeft,
-    VideoAction,
+    VideoAction(SyncInfo),
     ChatMessage(MessageData),
 }
 
@@ -45,7 +60,7 @@ pub struct UserJoinData {
 pub struct MessageData {
     pub user_id: String,
     pub room_id: String,
-    pub message: String
+    pub message: String,
 }
 
 impl FromStr for ActionType {

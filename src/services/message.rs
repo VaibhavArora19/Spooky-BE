@@ -1,6 +1,7 @@
 use futures_util::SinkExt;
 use mongodb::{
-    bson::{doc, to_bson}, Database
+    Database,
+    bson::{doc, to_bson},
 };
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message as TokioMessage;
@@ -11,40 +12,48 @@ use crate::RoomUserMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddMessageResponse {
+    pub response_type: String,
     pub user_id: String,
     pub username: String,
     pub name: String,
     pub avatar: String,
-    pub message: String
+    pub message: String,
 }
 
-pub async fn add_message(db: Database, room_id: String, message: Message) -> Result<AddMessageResponse, anyhow::Error> {
+pub async fn add_message(
+    db: Database,
+    room_id: String,
+    message: Message,
+) -> Result<AddMessageResponse, anyhow::Error> {
     let room_collection = db.collection::<Room>("rooms");
-    let user_collection =  db.collection::<User>("users");
+    let user_collection = db.collection::<User>("users");
 
     match room_collection
         .update_one(
             doc! {"room_id": room_id},
             doc! {"$push": {"messages": to_bson(&message.clone()).unwrap() }},
-            
         )
         .await
     {
         Ok(_) => {
-            match user_collection.find_one(doc! {"_id": message.user_id}).await {
+            match user_collection
+                .find_one(doc! {"_id": message.user_id})
+                .await
+            {
                 Ok(result) => {
                     if let Some(user) = result {
                         Ok(AddMessageResponse {
+                            response_type: String::from("Message"),
                             user_id: message.user_id.to_string(),
                             username: user.username,
                             name: user.name,
                             avatar: user.avatar,
-                            message: message.message
+                            message: message.message,
                         })
                     } else {
                         Err(anyhow::Error::msg("Failed to fetch user info"))
                     }
-                },
+                }
                 Err(err) => {
                     log::error!("Failed to fetch user info. Failed with error: {:?}", err);
 
@@ -58,23 +67,30 @@ pub async fn add_message(db: Database, room_id: String, message: Message) -> Res
                 err
             );
 
-            Err(anyhow::Error::msg("Failed to insert message into room collection"))
+            Err(anyhow::Error::msg(
+                "Failed to insert message into room collection",
+            ))
         }
     }
-
 }
 
-pub async fn broadcast_message(room_users_collection: RoomUserMap, room_id: String, message: AddMessageResponse) {
+pub async fn broadcast_message(
+    room_users_collection: RoomUserMap,
+    room_id: String,
+    message: TokioMessage,
+) {
     let read = room_users_collection.read().await;
 
     if let Some(users) = read.get(&room_id) {
-        let broadcast_message = TokioMessage::Text(serde_json::to_string(&message).unwrap().into());
-
         for (user_id, tx) in users {
-            let mut  write_tx = tx.write().await;
+            let mut write_tx = tx.write().await;
 
-            if let Err(error) = write_tx.send(broadcast_message.clone()).await {
-                log::error!("Failed to send message to user: {:}. Failed with error: {:?}", user_id, error)
+            if let Err(error) = write_tx.send(message.clone()).await {
+                log::error!(
+                    "Failed to send message to user: {:}. Failed with error: {:?}",
+                    user_id,
+                    error
+                )
             }
         }
     }

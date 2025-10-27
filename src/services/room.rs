@@ -2,13 +2,20 @@ use actix_web::{HttpResponse, post, web};
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
-use crate::{AppState, actions::Platform, db::db::Room};
+use crate::{
+    AppState, SyncInfo, actions::Platform, db::db::Room, services::video::set_sync_info,
+    ws_conn::VideoAction,
+};
 
 #[derive(Serialize, Deserialize)]
 pub struct RoomRequest {
     room_id: String,
     users: Vec<String>,
     platform: Platform,
+    time: u32,
+    updated_at: u64,
+    action: VideoAction,
+    updated_by: String,
 }
 
 #[post("/room/create")]
@@ -43,6 +50,15 @@ pub async fn create_new_room(
         "New room created with ID: {}",
         room_details.room_id.to_string()
     );
+
+    let sync_info = SyncInfo {
+        last_action: req.action.clone(),
+        time: req.time,
+        updated_at: req.updated_at,
+        updated_by: req.updated_by.clone(),
+    };
+
+    set_sync_info(req.room_id.clone(), sync_info, app_state.room_sync.clone()).await;
 
     HttpResponse::Ok().body(req.room_id.clone())
 }
