@@ -12,8 +12,8 @@ pub struct RoomRequest {
     room_id: String,
     users: Vec<String>,
     platform: Platform,
-    time: u32,
-    updated_at: u64,
+    time: f32,
+    updated_at: f64,
     action: VideoAction,
     updated_by: String,
 }

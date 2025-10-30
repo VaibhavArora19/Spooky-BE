@@ -13,8 +13,8 @@ pub mod db;
 pub mod services;
 pub mod ws_conn;
 
-pub type Tx = Arc<tokio::sync::RwLock<SplitSink<WebSocketStream<TcpStream>, Message>>>;
-pub type RoomUserMap = Arc<tokio::sync::RwLock<HashMap<String, HashMap<String, Tx>>>>; //room -> user -> WebsocketStream
+pub type Tx = SplitSink<WebSocketStream<TcpStream>, Message>;
+pub type RoomUserMap = Arc<tokio::sync::RwLock<HashMap<String, HashMap<String, Arc<tokio::sync::RwLock<Tx>>>>>>; //room -> user -> WebsocketStream
 pub type RoomSync = Arc<tokio::sync::RwLock<HashMap<String, SyncInfo>>>; //should also delete ones which are last updated around a day ago
 
 #[derive(Clone)]

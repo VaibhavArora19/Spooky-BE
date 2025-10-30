@@ -1,18 +1,19 @@
-use futures_util::SinkExt;
+use futures_util::{SinkExt};
 use mongodb::{
     Database,
     bson::{doc, to_bson},
 };
 use serde::{Deserialize, Serialize};
-use tokio_tungstenite::tungstenite::Message as TokioMessage;
+use tokio_tungstenite::{tungstenite::Message as TokioMessage};
 
-use crate::db::db::{Message, Room, User};
+use crate::{
+    db::db::{Message, Room, User},
+};
 
 use crate::RoomUserMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddMessageResponse {
-    pub response_type: String,
     pub user_id: String,
     pub username: String,
     pub name: String,
@@ -43,7 +44,6 @@ pub async fn add_message(
                 Ok(result) => {
                     if let Some(user) = result {
                         Ok(AddMessageResponse {
-                            response_type: String::from("Message"),
                             user_id: message.user_id.to_string(),
                             username: user.username,
                             name: user.name,
